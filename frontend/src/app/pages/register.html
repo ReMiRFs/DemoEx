@@ -1,0 +1,42 @@
+<section class="auth-layout" aria-labelledby="register-title">
+  <div class="intro">
+    <p class="eyebrow">Добро пожаловать</p>
+    <h1 id="register-title">Место для<br>ваших встреч.</h1>
+    <p class="lead">Создайте аккаунт, выберите помещение и следите за статусом бронирования.</p>
+    <div class="intro-note"><span aria-hidden="true">01 — 03</span><p>Аккаунт. Заявка. Встреча.<br>Всё необходимое в одном месте.</p></div>
+  </div>
+  <div class="panel">
+    <h2>Регистрация</h2>
+    <p class="muted">Все поля обязательны.</p>
+    <form #form="ngForm" (ngSubmit)="submit(form)" novalidate>
+      <div class="field">
+        <label for="reg-fullname">ФИО</label>
+        <input id="reg-fullname" name="fullName" [(ngModel)]="data.fullName" required pattern="[А-Яа-яЁё ]+" maxlength="255" autocomplete="name" data-testid="reg-fullname" placeholder="Иванов Иван Иванович">
+        <small>Кириллица и пробелы.</small>
+      </div>
+      <div class="field">
+        <label for="reg-login">Логин</label>
+        <input id="reg-login" name="login" [(ngModel)]="data.login" required minlength="6" maxlength="64" pattern="[A-Za-z0-9]+" autocomplete="username" data-testid="reg-login">
+        <small>От 6 символов: латинские буквы и цифры.</small>
+      </div>
+      <div class="field">
+        <label for="reg-password">Пароль</label>
+        <input id="reg-password" name="password" type="password" [(ngModel)]="data.password" required minlength="8" autocomplete="new-password" data-testid="reg-password">
+        <small>От 8 символов. Не более 72 байт.</small>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="reg-phone">Телефон</label>
+          <input id="reg-phone" name="phone" type="tel" [(ngModel)]="data.phone" required [pattern]="phonePattern" autocomplete="tel" placeholder="8(999)123-45-67" data-testid="reg-phone">
+        </div>
+        <div class="field">
+          <label for="reg-email">Электронная почта</label>
+          <input id="reg-email" name="email" type="email" [(ngModel)]="data.email" required email maxlength="255" autocomplete="email" data-testid="reg-email" placeholder="ivan@example.ru">
+        </div>
+      </div>
+      @if (error) { <p class="notice error" role="alert">{{ error }}</p> }
+      <button class="button button-primary button-wide" type="submit" [disabled]="busy" data-testid="reg-submit">{{ busy ? 'Создаём аккаунт…' : 'Создать пользователя' }}</button>
+    </form>
+    <p class="form-footer">Уже есть аккаунт? <a routerLink="/login">Войти</a></p>
+  </div>
+</section>

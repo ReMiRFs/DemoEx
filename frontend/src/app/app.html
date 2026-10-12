@@ -1,0 +1,30 @@
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" routerLink="/requests" aria-label="Главная страница">
+      <span class="brand-mark" aria-hidden="true">К</span>
+      <span>{{ app.title }}<small>{{ app.caption }}</small></span>
+    </a>
+    <nav aria-label="Главная навигация">
+      @if (auth.user(); as user) {
+        <a routerLink="/requests" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Мои заявки</a>
+        <a routerLink="/requests/new" routerLinkActive="active">Создать заявку</a>
+        @if (user.role === 'admin') {
+          <a routerLink="/admin" routerLinkActive="active">Админка</a>
+        }
+        <button class="button button-quiet" type="button" [disabled]="busy" (click)="logout()">Выйти</button>
+      } @else {
+        <a routerLink="/login" routerLinkActive="active">Войти</a>
+        <a routerLink="/register" routerLinkActive="active">Регистрация</a>
+      }
+    </nav>
+  </div>
+</header>
+<main class="container main" id="main">
+  @if (error) { <p class="notice error" role="alert">{{ error }}</p> }
+  <router-outlet />
+</main>
+<footer class="site-footer container">
+  <span>{{ app.title }}</span>
+  <span>Встречи начинаются здесь.</span>
+</footer>

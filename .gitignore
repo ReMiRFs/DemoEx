@@ -1,0 +1,29 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Installed dependencies and caches: prepare them on the exam computer
+node_modules/
+vendor/
+.offline/
+.cache/
+.angular/
+
+# Build output
+dist/
+bin/
+server
+server.exe
+*.test
+*.exe
+*.log
+coverage/
+*.zip
+*.tar.gz
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
