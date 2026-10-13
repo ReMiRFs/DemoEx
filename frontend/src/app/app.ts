@@ -1,91 +1,32 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
-
-interface Booking {
- id?: number;
- fullName: string;
- room: string;
- startsAt: string;
-}
+import { Component, inject } from '@angular/core';
+import { Title } from '@angular/platform-browser';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { finalize } from 'rxjs';
+import { AuthService } from './auth.service';
+import { APP } from './config';
+import { errorMessage } from './error-message';
 
 @Component({
- selector: 'app-root',
- imports: [FormsModule],
- templateUrl: './app.html',
+  selector: 'app-root',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  templateUrl: './app.html',
 })
-export class App implements OnInit {
- private http = inject(HttpClient);
- bookings: Booking[] = [];
- fullName = '';
- room = '';
- startsAt = '';
- editingId: number | undefined;
- message = '';
+export class App {
+  readonly app = APP;
+  readonly auth = inject(AuthService);
+  private router = inject(Router);
+  error = '';
+  busy = false;
 
- ngOnInit(): void { this.loadBookings(); }
+  constructor() { inject(Title).setTitle(APP.title); }
 
- loadBookings(): void {
-  this.http.get<Booking[]>('/api/requests').subscribe({
-   next: bookings => this.bookings = bookings,
-   error: err => this.message = 'Ошибка загрузки: ' + err.status,
-  });
- }
-
- submit(): void {
-  const booking: Booking = {
-   fullName: this.fullName.trim(), room: this.room.trim(), startsAt: this.startsAt,
-  };
-  if (!booking.fullName || !booking.room || !booking.startsAt) {
-   this.message = 'Заполните все поля';
-   return;
+  logout() {
+    if (this.busy) return;
+    this.busy = true;
+    this.error = '';
+    this.auth.logout().pipe(finalize(() => this.busy = false)).subscribe({
+      next: () => void this.router.navigate(['/login']),
+      error: error => this.error = errorMessage(error),
+    });
   }
-  if (this.editingId !== undefined) {
-   this.http.put<void>(`/api/requests/${this.editingId}`, booking).subscribe({
-    next: () => {
-     this.resetForm();
-     this.message = 'Изменения сохранены';
-     this.loadBookings();
-    },
-    error: err => this.message = 'Ошибка сохранения: ' + err.status,
-   });
-   return;
-  }
-  this.http.post<Booking>('/api/requests', booking).subscribe({
-   next: created => {
-    this.bookings.unshift(created);
-    this.resetForm();
-    this.message = 'Заявка создана';
-   },
-   error: err => this.message = 'Ошибка создания: ' + err.status,
-  });
- }
-
- editBooking(booking: Booking): void {
-  this.editingId = booking.id;
-  this.fullName = booking.fullName;
-  this.room = booking.room;
-  this.startsAt = booking.startsAt;
-  this.message = '';
- }
-
- deleteBooking(id: number | undefined): void {
-  if (id === undefined) return;
-  this.http.delete<void>(`/api/requests/${id}`).subscribe({
-   next: () => {
-    this.bookings = this.bookings.filter(booking => booking.id !== id);
-    if (this.editingId === id) this.resetForm();
-    this.message = 'Заявка удалена';
-   },
-   error: err => this.message = 'Ошибка удаления: ' + err.status,
-  });
- }
-
- resetForm(): void {
-  this.editingId = undefined;
-  this.fullName = '';
-  this.room = '';
-  this.startsAt = '';
-  this.message = '';
- }
 }

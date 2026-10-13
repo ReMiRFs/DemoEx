@@ -1,0 +1,43 @@
+<section class="form-page" aria-labelledby="request-title">
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Бронирование</p>
+      <h1 id="request-title">{{ id === null ? 'Новая заявка' : 'Изменение заявки' }}</h1>
+      <p class="lead">Выберите помещение и удобную дату.</p>
+    </div>
+    <a routerLink="/requests" class="text-link">← К моим заявкам</a>
+  </div>
+  <div class="panel form-panel">
+    @if (loading) { <p role="status">Загружаем заявку…</p> }
+    @if (error) { <p class="notice error" role="alert">{{ error }}</p> }
+    @if (!loading && !unavailable) {
+      <form #form="ngForm" (ngSubmit)="submit(form)" novalidate>
+        <div class="field">
+          <label for="req-room">Помещение</label>
+          <input type="text" id="req-room" name="room" [(ngModel)]="data.room" required maxlength="255" list="room-options" placeholder="Например, Коворкинг" data-testid="req-room">
+          <datalist id="room-options">
+            @for (room of rooms; track room) { <option [value]="room"></option> }
+          </datalist>
+          <small>Выберите из списка или введите название.</small>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="req-date">Дата мероприятия</label>
+            <input type="date" id="req-date" name="startsAt" [(ngModel)]="data.startsAt" required data-testid="req-date">
+          </div>
+          <div class="field">
+            <label for="req-payment">Способ оплаты</label>
+            <select id="req-payment" name="payment" [(ngModel)]="data.payment" required data-testid="req-payment">
+              <option value="cash">{{ payments.cash }}</option>
+              <option value="sbp">{{ payments.sbp }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="button button-primary" type="submit" [disabled]="busy" data-testid="req-submit">{{ busy ? 'Сохраняем…' : (id === null ? 'Отправить' : 'Сохранить изменения') }}</button>
+          <a class="button button-secondary" routerLink="/requests">Отмена</a>
+        </div>
+      </form>
+    }
+  </div>
+</section>
