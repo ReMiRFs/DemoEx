@@ -1,30 +1,33 @@
-<a class="skip-link" href="#main">Перейти к содержимому</a>
-<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" routerLink="/requests" aria-label="Главная страница">
-      <span class="brand-mark" aria-hidden="true">К</span>
-      <span>{{ app.title }}<small>{{ app.caption }}</small></span>
-    </a>
-    <nav aria-label="Главная навигация">
-      @if (auth.user(); as user) {
-        <a routerLink="/requests" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Мои заявки</a>
-        <a routerLink="/requests/new" routerLinkActive="active">Создать заявку</a>
-        @if (user.role === 'admin') {
-          <a routerLink="/admin" routerLinkActive="active">Админка</a>
-        }
-        <button class="button button-quiet" type="button" [disabled]="busy" (click)="logout()">Выйти</button>
-      } @else {
-        <a routerLink="/login" routerLinkActive="active">Войти</a>
-        <a routerLink="/register" routerLinkActive="active">Регистрация</a>
-      }
-    </nav>
+<main>
+ <h1>{{ editingId === undefined ? 'Создание заявки' : 'Редактирование заявки' }}</h1>
+ <form (ngSubmit)="submit()">
+  <label for="fullName">ФИО</label>
+  <input id="fullName" name="fullName" [(ngModel)]="fullName" required maxlength="255">
+  <label for="room">Помещение</label>
+  <input id="room" name="room" [(ngModel)]="room" required maxlength="255" data-testid="req-room">
+  <label for="startsAt">Дата мероприятия</label>
+  <input id="startsAt" name="startsAt" type="date" [(ngModel)]="startsAt" required data-testid="req-date">
+  <div class="buttons">
+   <button type="submit" data-testid="req-submit">{{ editingId === undefined ? 'Создать' : 'Сохранить' }}</button>
+   @if (editingId !== undefined) {
+    <button type="button" (click)="resetForm()">Отмена</button>
+   }
   </div>
-</header>
-<main class="container main" id="main">
-  @if (error) { <p class="notice error" role="alert">{{ error }}</p> }
-  <router-outlet />
+ </form>
+ <p role="status">{{ message }}</p>
+ <h2>Заявки</h2>
+ <section data-testid="req-list">
+  @for (booking of bookings; track booking.id) {
+   <article>
+    <p><strong>№ {{ booking.id }} — {{ booking.fullName }}</strong></p>
+    <p>{{ booking.room }} · {{ booking.startsAt }}</p>
+    <div class="buttons">
+     <button type="button" (click)="editBooking(booking)">Редактировать</button>
+     <button type="button" (click)="deleteBooking(booking.id)">Удалить</button>
+    </div>
+   </article>
+  } @empty {
+   <p>Заявок пока нет</p>
+  }
+ </section>
 </main>
-<footer class="site-footer container">
-  <span>{{ app.title }}</span>
-  <span>Встречи начинаются здесь.</span>
-</footer>

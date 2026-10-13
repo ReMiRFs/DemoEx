@@ -1,137 +1,120 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"log"
-	"net"
-	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"strings"
-	"time"
-
+	"encoding/json"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/joho/godotenv"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
 )
 
-type app struct {
-	db             *sqlx.DB
-	secureCookie   bool
-	allowedOrigins map[string]bool
-	staticDir      string
-}
-
-func env(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
+type Booking struct {
+	ID       int64  `json:"id" db:"id"`
+	FullName string `json:"fullName" db:"full_name"`
+	Room     string `json:"room" db:"room"`
+	StartsAt string `json:"startsAt" db:"starts_at"`
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Fatal("Не удалось прочитать .env: ", err)
-	}
-	if len(os.Args) > 1 && os.Args[1] != "migrate" && os.Args[1] != "seed-admin" {
-		log.Fatal("Команды: go run . | go run . migrate | go run . seed-admin")
-	}
-
-	// Config корректно обрабатывает специальные символы в пароле.
+	// Подставь свои настройки MySQL.
 	config := mysql.NewConfig()
-	config.User = env("DB_USER", "demo")
-	config.Passwd = os.Getenv("DB_PASSWORD")
+	config.User = "YOUR_MYSQL_USER"
+	config.Passwd = "YOUR_MYSQL_PASSWORD"
 	config.Net = "tcp"
-	config.Addr = net.JoinHostPort(env("DB_HOST", "127.0.0.1"), env("DB_PORT", "3306"))
-	config.DBName = env("DB_NAME", "demoex")
+	config.Addr = "127.0.0.1:3306"
+	config.DBName = "demo_simple"
 	config.ParseTime = true
-	config.Loc = time.UTC
-	config.Params = map[string]string{"charset": "utf8mb4", "time_zone": "'+00:00'"}
-	config.Timeout = 5 * time.Second
-	config.ReadTimeout = 10 * time.Second
-	config.WriteTimeout = 10 * time.Second
-	db, err := sqlx.Open("mysql", config.FormatDSN())
+	db, err := sqlx.Connect("mysql", config.FormatDSN())
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	db.SetConnMaxLifetime(3 * time.Minute)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err = db.PingContext(ctx)
-	cancel()
-	if err != nil {
-		log.Fatal("Подключение к MySQL: ", err)
-	}
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "migrate":
-			err = migrate(db)
-		case "seed-admin":
-			err = seedAdmin(db)
-		}
+
+	http.HandleFunc("GET /api/requests", func(w http.ResponseWriter, r *http.Request) {
+		bookings := []Booking{}
+		err := db.Select(&bookings, "SELECT id, full_name, room, DATE_FORMAT(starts_at, '%Y-%m-%d') AS starts_at FROM bookings ORDER BY id DESC")
 		if err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
-		return
-	}
-	secure, err := strconv.ParseBool(env("COOKIE_SECURE", "false"))
-	if err != nil {
-		log.Fatal("COOKIE_SECURE должен быть true или false")
-	}
-	a := &app{
-		db: db, secureCookie: secure,
-		allowedOrigins: make(map[string]bool),
-		staticDir:      env("STATIC_DIR", "../frontend/dist/frontend/browser"),
-	}
-	for _, origin := range strings.Split(env("ALLOWED_ORIGINS", "http://localhost:4200,http://127.0.0.1:4200"), ",") {
-		a.allowedOrigins[strings.TrimSpace(origin)] = true
-	}
-	server := &http.Server{
-		Addr: env("ADDR", "127.0.0.1:8080"), Handler: a.routes(),
-		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-		WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second,
-	}
-	stop, stopCancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stopCancel()
-	go func() {
-		<-stop.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := server.Shutdown(ctx); err != nil {
-			log.Print("Завершение сервера: ", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(bookings)
+	})
+	http.HandleFunc("POST /api/requests", func(w http.ResponseWriter, r *http.Request) {
+		var booking Booking
+		if !readBooking(w, r, &booking) {
+			return
 		}
-	}()
-	log.Printf("Сервер: http://%s; API: /api/health", server.Addr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
-	}
+		result, err := db.Exec("INSERT INTO bookings (full_name, room, starts_at) VALUES (?, ?, ?)", booking.FullName, booking.Room, booking.StartsAt)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		booking.ID, err = result.LastInsertId()
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(booking)
+	})
+	http.HandleFunc("PUT /api/requests/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := readID(w, r)
+		if !ok {
+			return
+		}
+		var booking Booking
+		if !readBooking(w, r, &booking) {
+			return
+		}
+		_, err := db.Exec("UPDATE bookings SET full_name = ?, room = ?, starts_at = ? WHERE id = ?", booking.FullName, booking.Room, booking.StartsAt, id)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	http.HandleFunc("DELETE /api/requests/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := readID(w, r)
+		if !ok {
+			return
+		}
+		_, err := db.Exec("DELETE FROM bookings WHERE id = ?", id)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	log.Println("Go: http://127.0.0.1:8080")
+	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
 }
 
-func (a *app) routes() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", a.health)
-	mux.HandleFunc("POST /api/auth/register", a.register)
-	mux.HandleFunc("POST /api/auth/login", a.login)
-	mux.HandleFunc("GET /api/auth/me", a.auth(false, a.me))
-	mux.HandleFunc("POST /api/auth/logout", a.logout)
-	mux.HandleFunc("GET /api/requests", a.auth(false, a.listRequests))
-	mux.HandleFunc("POST /api/requests", a.auth(false, a.createRequest))
-	mux.HandleFunc("PUT /api/requests/{id}", a.auth(false, a.updateRequest))
-	mux.HandleFunc("DELETE /api/requests/{id}", a.auth(false, a.deleteRequest))
-	mux.HandleFunc("POST /api/requests/{id}/review", a.auth(false, a.reviewRequest))
-	mux.HandleFunc("GET /api/admin/requests", a.auth(true, a.listAdminRequests))
-	mux.HandleFunc("PATCH /api/admin/requests/{id}/status", a.auth(true, a.changeStatus))
-	// Неизвестный API никогда не должен возвращать index.html приложения.
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		fail(w, http.StatusNotFound, "Маршрут API не найден")
-	})
-	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
-		fail(w, http.StatusNotFound, "Маршрут API не найден")
-	})
-	mux.HandleFunc("/", a.spa)
-	return a.protect(mux)
+func readBooking(w http.ResponseWriter, r *http.Request, booking *Booking) bool {
+	if err := json.NewDecoder(r.Body).Decode(booking); err != nil {
+		http.Error(w, "Некорректный JSON", http.StatusBadRequest)
+		return false
+	}
+	if strings.TrimSpace(booking.FullName) == "" || strings.TrimSpace(booking.Room) == "" || booking.StartsAt == "" {
+		http.Error(w, "Заполните все поля", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func readID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		http.Error(w, "Некорректный ID", http.StatusBadRequest)
+		return 0, false
+	}
+	return id, true
+}
+
+func serverError(w http.ResponseWriter, err error) {
+	log.Println(err)
+	http.Error(w, "Ошибка базы данных", http.StatusInternalServerError)
 }
